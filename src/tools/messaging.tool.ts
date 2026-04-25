@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { config } from '../config.js';
 import { withAudit } from '../security/audit.js';
-import { normalizeJid } from '../whatsapp/types.js';
+import { isGroupJid, normalizeJid } from '../whatsapp/types.js';
 import type { ToolContext } from './context.js';
 
 export const sendTextMessageInput = z
@@ -20,6 +21,14 @@ export type SendTextMessageInput = z.infer<typeof sendTextMessageInput>;
 export async function sendTextMessage(ctx: ToolContext, input: SendTextMessageInput) {
   return withAudit(ctx.repo, 'send_text_message', { to: input.to, length: input.text.length }, async () => {
     const jid = normalizeJid(input.to);
+    const group = isGroupJid(jid);
+
+    if (group && config.ignoreGroups) {
+      throw new Error(
+        'Envio para grupos esta desativado (IGNORE_GROUPS=true). Defina IGNORE_GROUPS=false no .env para permitir.',
+      );
+    }
+
     ctx.whitelist.assertAllowed(jid);
 
     const rl = ctx.rateLimit.consume(`send:${jid}`);
@@ -30,6 +39,11 @@ export async function sendTextMessage(ctx: ToolContext, input: SendTextMessageIn
     }
 
     const result = await ctx.client.sendText(jid, input.text);
+    ctx.repo.upsertChat({
+      jid,
+      isGroup: group,
+      lastMessageTs: result.ts,
+    });
     ctx.repo.insertMessage({
       id: result.id,
       chatJid: jid,

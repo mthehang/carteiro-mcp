@@ -1,4 +1,5 @@
 import type { WAMessage, Contact as BaileysContact } from '@whiskeysockets/baileys';
+import { config } from '../config.js';
 import type { Repository } from '../db/repository.js';
 import { logger } from '../logger.js';
 import type { WhatsAppClient } from './client.js';
@@ -36,6 +37,7 @@ export function wireEvents(client: WhatsAppClient, repo: Repository): void {
   client.on('message', ({ msg }: { msg: WAMessage; type: string }) => {
     try {
       if (!msg.key?.id || !msg.key.remoteJid) return;
+      if (config.ignoreGroups && isGroupJid(msg.key.remoteJid)) return;
       const ts =
         typeof msg.messageTimestamp === 'number'
           ? msg.messageTimestamp * 1000
@@ -77,6 +79,7 @@ export function wireEvents(client: WhatsAppClient, repo: Repository): void {
   client.on('chat', (c: { id?: string; name?: string | null; unreadCount?: number; archived?: boolean; pinned?: number | null | undefined }) => {
     try {
       if (!c.id) return;
+      if (config.ignoreGroups && isGroupJid(c.id)) return;
       repo.upsertChat({
         jid: c.id,
         name: c.name ?? null,

@@ -31,6 +31,7 @@ const ConfigSchema = z.object({
         : [],
     ),
   rateLimitSendPerMin: z.coerce.number().int().positive().default(30),
+  ignoreGroups: z.coerce.boolean().default(true),
 
   logLevel: z
     .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'])
@@ -57,6 +58,7 @@ function parseEnv(): Config {
 
     allowedContacts: process.env.ALLOWED_CONTACTS,
     rateLimitSendPerMin: process.env.RATE_LIMIT_SEND_PER_MIN,
+    ignoreGroups: process.env.IGNORE_GROUPS,
 
     logLevel: process.env.LOG_LEVEL,
     logJson: process.env.LOG_JSON,
