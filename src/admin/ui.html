@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Carteiro MCP - Admin</title>
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --card: #131a22;
+        --fg: #e7edf3;
+        --muted: #8a96a3;
+        --accent: #25d366;
+        --danger: #ff5d5d;
+        --border: #1f2934;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        margin: 0;
+        padding: 32px 16px;
+        min-height: 100vh;
+      }
+      .container { max-width: 540px; margin: 0 auto; }
+      h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.02em; }
+      p.subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .badge.connected { background: rgba(37, 211, 102, 0.15); color: var(--accent); }
+      .badge.qr_pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+      .badge.connecting { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+      .badge.disconnected, .badge.logged_out { background: rgba(255, 93, 93, 0.15); color: var(--danger); }
+      .qr {
+        display: flex; justify-content: center; padding: 16px; background: white; border-radius: 12px;
+      }
+      .qr img { max-width: 100%; height: auto; }
+      .meta { font-size: 13px; color: var(--muted); }
+      .meta .name { color: var(--fg); font-weight: 600; }
+      button {
+        background: var(--accent); color: #052e15; border: none; padding: 10px 16px;
+        font-size: 14px; font-weight: 600; border-radius: 10px; cursor: pointer; transition: opacity 0.15s;
+      }
+      button:hover { opacity: 0.85; }
+      button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+      .pairing { font-family: 'JetBrains Mono', monospace; font-size: 28px; letter-spacing: 0.2em; text-align: center; padding: 16px; }
+      footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Carteiro MCP</h1>
+      <p class="subtitle">Admin local. Escaneie o QR ou use o pairing code para conectar seu WhatsApp.</p>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <strong>Status</strong>
+            <div class="meta" id="status-meta">carregando...</div>
+          </div>
+          <span class="badge" id="status-badge">--</span>
+        </div>
+      </div>
+
+      <div class="card" id="qr-card" style="display: none">
+        <strong>QR Code</strong>
+        <p class="meta">WhatsApp -> Aparelhos conectados -> Conectar um aparelho</p>
+        <div class="qr"><img id="qr-img" alt="QR" /></div>
+      </div>
+
+      <div class="card" id="pairing-card" style="display: none">
+        <strong>Pairing Code</strong>
+        <p class="meta">WhatsApp -> Aparelhos conectados -> Conectar com numero. Digite:</p>
+        <div class="pairing" id="pairing-code">----</div>
+      </div>
+
+      <div class="card" id="action-card">
+        <div class="row">
+          <button id="auth-btn">Autenticar / Gerar QR</button>
+          <button class="danger" id="logout-btn">Logout</button>
+        </div>
+      </div>
+
+      <footer>carteiro-mcp v0.1.0 - polling a cada 3s</footer>
+    </div>
+
+    <script>
+      const TOKEN = new URLSearchParams(location.search).get('token') || '';
+      function headers() {
+        return TOKEN ? { 'authorization': 'Bearer ' + TOKEN, 'content-type': 'application/json' }
+                     : { 'content-type': 'application/json' };
+      }
+
+      function setMetaConnected(name, jid) {
+        const meta = document.getElementById('status-meta');
+        while (meta.firstChild) meta.removeChild(meta.firstChild);
+        const span = document.createElement('span');
+        span.className = 'name';
+        span.textContent = name || '?';
+        meta.appendChild(span);
+        meta.appendChild(document.createTextNode(' - ' + (jid || '')));
+      }
+
+      function setMetaText(text) {
+        const meta = document.getElementById('status-meta');
+        meta.textContent = text;
+      }
+
+      async function fetchStatus() {
+        try {
+          const r = await fetch('/admin/status', { headers: headers() });
+          if (!r.ok) throw new Error('status ' + r.status);
+          const data = await r.json();
+          render(data);
+        } catch (err) {
+          setMetaText('erro: ' + err.message);
+        }
+      }
+
+      function render(data) {
+        const badge = document.getElementById('status-badge');
+        badge.className = 'badge ' + data.status;
+        badge.textContent = data.status;
+
+        if (data.jid) {
+          setMetaConnected(data.push_name, data.jid);
+        } else {
+          setMetaText('Sem sessao ativa');
+        }
+
+        const qrCard = document.getElementById('qr-card');
+        qrCard.style.display = data.qr_data_url ? 'block' : 'none';
+        if (data.qr_data_url) document.getElementById('qr-img').src = data.qr_data_url;
+
+        const pairCard = document.getElementById('pairing-card');
+        pairCard.style.display = data.pairing_code ? 'block' : 'none';
+        if (data.pairing_code) {
+          document.getElementById('pairing-code').textContent = data.pairing_code;
+        }
+      }
+
+      document.getElementById('auth-btn').addEventListener('click', async () => {
+        await fetch('/admin/authenticate', { method: 'POST', headers: headers() });
+        await fetchStatus();
+      });
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        if (!confirm('Encerrar sessao do WhatsApp?')) return;
+        await fetch('/admin/logout', { method: 'POST', headers: headers() });
+        await fetchStatus();
+      });
+
+      fetchStatus();
+      setInterval(fetchStatus, 3000);
+    </script>
+  </body>
+</html>

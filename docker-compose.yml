@@ -1,0 +1,41 @@
+services:
+  carteiro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: carteiro-mcp:0.1.0
+    container_name: carteiro-mcp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TRANSPORT: ${TRANSPORT:-http}
+      HTTP_PORT: ${HTTP_PORT:-3000}
+      ADMIN_PORT: ${ADMIN_PORT:-3001}
+      DATA_DIR: /data
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_JSON: "true"
+    ports:
+      - "${HTTP_PORT:-3000}:3000"
+    volumes:
+      - carteiro-data:/data
+      - carteiro-media:/media
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  carteiro-data:
+    name: carteiro-data
+  carteiro-media:
+    name: carteiro-media
