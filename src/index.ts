@@ -37,9 +37,7 @@ async function main(): Promise<void> {
     whitelist: new ContactWhitelist(config.allowedContacts),
   };
 
-  if (config.transport !== 'http') {
-    void client.start().catch((err) => logger.error({ err }, '[main] WhatsApp start falhou'));
-  }
+  void client.start().catch((err) => logger.error({ err }, '[main] WhatsApp start falhou'));
 
   if (config.messageRetentionDays > 0) {
     setInterval(

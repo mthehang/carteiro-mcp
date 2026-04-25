@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import makeWASocket, {
   DisconnectReason,
+  fetchLatestBaileysVersion,
   useMultiFileAuthState,
   type WASocket,
   type ConnectionState,
@@ -58,9 +59,21 @@ export class WhatsAppClient extends EventEmitter {
     this.setStatus('connecting');
     logger.info('[wa] conectando ao WhatsApp...');
 
+    let waVersion: [number, number, number] | undefined;
+    try {
+      const fetched = await fetchLatestBaileysVersion();
+      waVersion = fetched.version;
+      logger.info(
+        { version: waVersion.join('.'), isLatest: fetched.isLatest },
+        '[wa] versao do WhatsApp Web detectada',
+      );
+    } catch (err) {
+      logger.warn({ err }, '[wa] falha ao buscar versao mais recente, usando default');
+    }
+
     this.sock = makeWASocket({
       auth: state,
-      printQRInTerminal: false,
+      version: waVersion,
       browser: [config.waBrowserName, 'Chrome', '120.0.0.0'],
       syncFullHistory: false,
       markOnlineOnConnect: false,
